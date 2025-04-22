@@ -31,6 +31,9 @@ def generate_frames():
         if not success:
             break
 
+        # Mirror the frame horizontally
+        frame = cv2.flip(frame, 1)
+
         # Perform detection
         results = model(frame, verbose=False)
         detections = []
