@@ -5,3 +5,5 @@ tensorflow
 flask
 opencv-python
 gunicorn
+filterpy
+flask-cors
