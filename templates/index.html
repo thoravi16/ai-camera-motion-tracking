@@ -1,22 +1,65 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>AI Camera Motion Tracker</title>
   <style>
     body { background: #000; color: #fff; font-family: Arial; text-align: center; }
     h1 { color: #0ff; }
     button { padding: 10px; margin: 10px; font-size: 16px; }
+    video, img { margin-top: 10px; }
   </style>
 </head>
 <body>
   <h1>AI Camera Motion Detection</h1>
-  <img src="/video" width="640" height="480" />
+
+  <video id="video" width="640" height="480" autoplay muted></video>
+  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+  <img id="processed" width="640" height="480" />
+
   <p>Motion Status: <span id="motion">Checking...</span></p>
   <p>Motion Count: <span id="motion-count">0</span></p>
+
   <button onclick="toggle(true)">Enable Tracking</button>
   <button onclick="toggle(false)">Disable Tracking</button>
 
   <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const processed = document.getElementById('processed');
+    const ctx = canvas.getContext('2d');
+
+    // Start the webcam
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        console.error("Error accessing webcam:", err);
+      });
+
+    // Send frames to server every 200ms
+    setInterval(() => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(blob => {
+        const formData = new FormData();
+        formData.append('frame', blob, 'frame.jpg');
+
+        fetch('/process_frame', {
+          method: 'POST',
+          body: formData
+        })
+        .then(response => response.blob())
+        .then(imageBlob => {
+          processed.src = URL.createObjectURL(imageBlob);
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+      }, 'image/jpeg');
+    }, 200);
+
     function toggle(state) {
       fetch("/toggle-tracking", {
         method: "POST",
