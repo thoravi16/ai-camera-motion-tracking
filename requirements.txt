@@ -7,3 +7,4 @@ opencv-python
 gunicorn
 filterpy
 flask-cors
+ultralytics
