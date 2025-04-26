@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Camera Motion Tracker</title>
+  <style>
+    body { background: #000; color: #fff; font-family: Arial; text-align: center; }
+    h1 { color: #0ff; }
+    button { padding: 10px; margin: 10px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1>AI Camera Motion Detection</h1>
+  <img src="/video" width="640" height="480" />
+  <p>Motion Status: <span id="motion">Checking...</span></p>
+  <p>Motion Count: <span id="motion-count">0</span></p>
+  <button onclick="toggle(true)">Enable Tracking</button>
+  <button onclick="toggle(false)">Disable Tracking</button>
+
+  <script>
+    function toggle(state) {
+      fetch("/toggle-tracking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tracking: state })
+      });
+    }
+
+    function checkMotion() {
+      fetch("/motion-status")
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("motion").innerText = data.motion ? "Motion Detected" : "No Motion";
+        });
+    }
+
+    function updateMotionCount() {
+      fetch("/motion-count")
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('motion-count').innerText = data.motion_count;
+        });
+    }
+
+    setInterval(checkMotion, 1000);
+    setInterval(updateMotionCount, 1000);
+  </script>
+</body>
+</html>
