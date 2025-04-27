@@ -3,7 +3,7 @@ import numpy as np
 from flask import Flask, Response, jsonify, request, render_template
 from flask_cors import CORS
 from ultralytics import YOLO
-from utils.deepsort import DeepSort  
+from utils.deep_sort import DeepSort  
 
 app = Flask(__name__)
 CORS(app)
