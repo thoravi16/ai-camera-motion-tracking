@@ -3,14 +3,16 @@ import numpy as np
 from flask import Flask, Response, jsonify, request, render_template
 from flask_cors import CORS
 from ultralytics import YOLO
+from utils.deepsort import DeepSort  
 
 app = Flask(__name__)
 CORS(app)
 
-# Load YOLOv8 Nano model (small and fast)
-model = YOLO("yolov8n.pt")  # Make sure 'yolov8n.pt' is present
+# Load models
+model = YOLO("yolov8n.pt")  # Lightweight YOLOv8
+tracker = DeepSort()  # Initialize DeepSORT
 
-# Tracking and motion flags
+# Motion and tracking
 motion_detected = False
 motion_count = 0
 unique_ids = set()
@@ -36,34 +38,48 @@ def process_frame():
 
     frame = cv2.flip(frame, 1)
 
-    # Resize frame for speed
-    resized_frame = cv2.resize(frame, (416, 416))
+    resized_frame = cv2.resize(frame, (640, 480))  # Resizing for better DeepSORT performance
 
     results = model.predict(resized_frame, verbose=False)
 
     detections = []
+    confidences = []
     for result in results:
         for box in result.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             conf = box.conf[0].item()
             cls = int(box.cls[0].item())
 
-            if cls == 0:  # 0 is 'person' class
-                detections.append([x1, y1, x2, y2, conf])
+            if cls == 0:  # Only person class
+                detections.append([x1, y1, x2 - x1, y2 - y1])  # (x, y, w, h)
+                confidences.append(conf)
 
     motion_detected = False
 
     if tracking_enabled and len(detections) > 0:
         motion_detected = True
-        for det in detections:
-            x1, y1, x2, y2, conf = det
-            cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            label = f"Person {conf:.2f}"
-            cv2.putText(resized_frame, label, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        motion_count += 1
 
-    # Encode the processed frame
+        # Prepare detections
+        dets = np.array(detections)
+        confs = np.array(confidences)
+
+        # DeepSORT update
+        tracks = tracker.update(dets, confs, resized_frame)
+
+        for track in tracks:
+            track_id = int(track[4])
+            x1, y1, x2, y2 = map(int, track[:4])
+
+            # Draw bbox
+            cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(resized_frame, f"ID {track_id}", (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # Count only new IDs
+            if track_id not in unique_ids:
+                unique_ids.add(track_id)
+                motion_count += 1
+
     _, buffer = cv2.imencode('.jpg', resized_frame)
     return Response(buffer.tobytes(), mimetype='image/jpeg')
 
