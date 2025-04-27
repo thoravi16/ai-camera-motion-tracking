@@ -2,15 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AI Camera Motion Tracker</title>
+  <title>AI Camera Motion Detection</title>
   <style>
-    body { background: #000; color: #fff; font-family: Arial; text-align: center; }
+    body { background: #000; color: #fff; font-family: Arial, sans-serif; text-align: center; }
     h1 { color: #0ff; }
-    button { padding: 10px; margin: 10px; font-size: 16px; }
+    button { padding: 10px 20px; margin: 10px; font-size: 16px; }
     video, img { margin-top: 10px; }
   </style>
 </head>
 <body>
+
   <h1>AI Camera Motion Detection</h1>
 
   <video id="video" width="640" height="480" autoplay muted></video>
@@ -29,19 +30,17 @@
     const processed = document.getElementById('processed');
     const ctx = canvas.getContext('2d');
 
-    // Start the webcam
     navigator.mediaDevices.getUserMedia({ video: true })
       .then(stream => {
         video.srcObject = stream;
       })
       .catch(err => {
-        console.error("Error accessing webcam:", err);
+        console.error("Webcam Error:", err);
       });
 
-    // Send frames to server every 200ms
+    // Send frame every 300ms (safer for server)
     setInterval(() => {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
       canvas.toBlob(blob => {
         const formData = new FormData();
         formData.append('frame', blob, 'frame.jpg');
@@ -54,11 +53,9 @@
         .then(imageBlob => {
           processed.src = URL.createObjectURL(imageBlob);
         })
-        .catch(error => {
-          console.error('Error:', error);
-        });
+        .catch(error => console.error('Frame Error:', error));
       }, 'image/jpeg');
-    }, 200);
+    }, 300);
 
     function toggle(state) {
       fetch("/toggle-tracking", {
@@ -78,14 +75,15 @@
 
     function updateMotionCount() {
       fetch("/motion-count")
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
-          document.getElementById('motion-count').innerText = data.motion_count;
+          document.getElementById("motion-count").innerText = data.motion_count;
         });
     }
 
     setInterval(checkMotion, 1000);
     setInterval(updateMotionCount, 1000);
   </script>
+
 </body>
 </html>

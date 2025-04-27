@@ -3,17 +3,14 @@ import numpy as np
 from flask import Flask, Response, jsonify, request, render_template
 from flask_cors import CORS
 from ultralytics import YOLO
-from utils.deep_sort.deep_sort import DeepSort
 
 app = Flask(__name__)
 CORS(app)
 
-# Load YOLOv8 model
-model = YOLO("models/yolov8n.pt")
+# Load YOLOv8 Nano model (small and fast)
+model = YOLO("yolov8n.pt")  # Make sure 'yolov8n.pt' is present
 
-# Initialize DeepSORT tracker
-tracker = DeepSort(model_path="models/deep_sort.ckpt")
-
+# Tracking and motion flags
 motion_detected = False
 motion_count = 0
 unique_ids = set()
@@ -37,42 +34,37 @@ def process_frame():
     if frame is None:
         return jsonify({'error': 'Invalid frame'}), 400
 
-    # Flip frame (optional)
     frame = cv2.flip(frame, 1)
 
-    # Run YOLO detection
-    results = model(frame, verbose=False)
-    detections = []
+    # Resize frame for speed
+    resized_frame = cv2.resize(frame, (416, 416))
 
+    results = model.predict(resized_frame, verbose=False)
+
+    detections = []
     for result in results:
         for box in result.boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             conf = box.conf[0].item()
             cls = int(box.cls[0].item())
 
-            if cls == 0:  # 'person'
+            if cls == 0:  # 0 is 'person' class
                 detections.append([x1, y1, x2, y2, conf])
 
-    detections = np.array(detections) if detections else np.empty((0, 5))
+    motion_detected = False
 
-    # DeepSORT tracking
-    if tracking_enabled:
-        tracked_objects = tracker.update(detections)
-        motion_detected = len(tracked_objects) > 0
-
-        for obj in tracked_objects:
-            x1, y1, x2, y2, track_id = map(int, obj[:5])
-            if track_id not in unique_ids:
-                unique_ids.add(track_id)
-                motion_count += 1
-                print(f"New motion detected. Total count: {motion_count}")
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"Person {track_id}", (x1, y1 - 10),
+    if tracking_enabled and len(detections) > 0:
+        motion_detected = True
+        for det in detections:
+            x1, y1, x2, y2, conf = det
+            cv2.rectangle(resized_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            label = f"Person {conf:.2f}"
+            cv2.putText(resized_frame, label, (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        motion_count += 1
 
-    # Encode the processed frame to send back
-    _, buffer = cv2.imencode('.jpg', frame)
+    # Encode the processed frame
+    _, buffer = cv2.imencode('.jpg', resized_frame)
     return Response(buffer.tobytes(), mimetype='image/jpeg')
 
 @app.route('/motion-status')
